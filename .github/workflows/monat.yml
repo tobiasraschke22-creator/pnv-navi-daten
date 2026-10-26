@@ -1,0 +1,44 @@
+name: Neuer Monat
+
+# Täglich nachsehen, ob piebro/deutsche-bahn-data (DB, CC BY 4.0) einen neuen Monat hat – dann auswerten und einchecken.
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  monat:
+    runs-on: ubuntu-latest
+    env:
+      VS_DATEN: daten
+      VS_OUT: vs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Neuer Monat vorhanden?
+        id: m
+        run: |
+          M=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)
+          echo "monat=$M" >> "$GITHUB_OUTPUT"
+          if [ -f "daten/linien-$M.json.gz" ]; then echo "neu=nein" >> "$GITHUB_OUTPUT"; exit 0; fi
+          URL="https://huggingface.co/datasets/piebro/deutsche-bahn-data/resolve/main/monthly_processed_data/data-$M.parquet"
+          if curl -sfIL "$URL" > /dev/null; then echo "neu=ja" >> "$GITHUB_OUTPUT"; echo "url=$URL" >> "$GITHUB_OUTPUT"; else echo "neu=nein" >> "$GITHUB_OUTPUT"; fi
+      - name: Auswerten
+        if: steps.m.outputs.neu == 'ja'
+        run: |
+          pip install duckdb
+          curl -sSL -o "/tmp/data-${{ steps.m.outputs.monat }}.parquet" "${{ steps.m.outputs.url }}"
+          python3 tools/verspaetung.py monat "/tmp/data-${{ steps.m.outputs.monat }}.parquet"
+          python3 tools/verspaetung.py bauen
+      - name: Einchecken
+        if: steps.m.outputs.neu == 'ja'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add daten vs
+          git commit -m "Monat ${{ steps.m.outputs.monat }}" && git push
