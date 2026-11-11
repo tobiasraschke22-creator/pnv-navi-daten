@@ -31,7 +31,7 @@ jobs:
       - name: Auswerten
         if: steps.m.outputs.neu == 'ja'
         run: |
-          pip install duckdb
+          pip install duckdb numpy
           curl -sSL -o "/tmp/data-${{ steps.m.outputs.monat }}.parquet" "${{ steps.m.outputs.url }}"
           python3 tools/verspaetung.py monat "/tmp/data-${{ steps.m.outputs.monat }}.parquet"
           python3 tools/verspaetung.py bauen
